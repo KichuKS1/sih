@@ -22,29 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-# Frontend
-node_modules/
-dist/
-# src/.env
-.env
-
-# Backend
-backend/.env
-backend/.venv/
-__pycache__/
-*.pyc
-*.log
-
-# App data / generated files
-# speech_uploads/
-# uploads/
-# tmp/
-# .cache/
-
-# Models (commit only if intentionally small/public)
-backend/model.pkl
-!backend/app/models/**
-
-# OS/editor noise
-.DS_Store
-Thumbs.db

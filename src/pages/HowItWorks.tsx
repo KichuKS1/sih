@@ -4,27 +4,26 @@ const HowItWorks = () => {
   const steps = [
     {
       icon: Users,
-      title: "Simple Cognitive Tests",
-      description: "Take easy-to-understand tests from your mobile device or computer. Our assessments are designed to be accessible for all ages and technical skill levels.",
-      details: ["Memory recall exercises", "Pattern recognition tasks", "Language comprehension tests", "Attention and focus assessments"]
+      title: "Onboarding and Consent",
+      details:["Consent from the user", "Responses are confidential", "Activities are not medical tests"]
+    },
+    {
+      icon: Users,
+      title: "Speech Analysis",
+      description: "Take part in speech-based activities designed to capture and analyze natural language. These assessments are simple, engaging, and can be completed using your voice on any device.",
+      details: ["Picture description", "Open conversation", "Story recall"]
     },
     {
       icon: Brain,
-      title: "AI Analysis",
-      description: "Our advanced machine learning algorithms analyze your responses, comparing them against extensive clinical datasets to identify potential cognitive changes.",
-      details: ["Pattern recognition analysis", "Response time evaluation", "Accuracy scoring", "Trend identification over time"]
-    },
-    {
-      icon: BarChart3,
-      title: "Clear Reports",
-      description: "Receive easy-to-understand reports that highlight key findings without overwhelming medical jargon. Perfect for sharing with family or healthcare providers.",
-      details: ["Visual progress tracking", "Risk level indicators", "Personalized recommendations", "Printable summary reports"]
+      title: "Simple Cognitive Tests",
+      description: "Take easy-to-understand tests from your mobile device or computer. Our assessments are designed to be accessible for all ages and technical skill levels.",
+      details: ["Word recall exercises", "Pattern recognition tasks", "Attention and focus assessments"]
     },
     {
       icon: FileText,
-      title: "Early Action",
-      description: "Use insights to have informed conversations with healthcare professionals and take proactive steps for cognitive health management.",
-      details: ["Healthcare provider sharing", "Family discussion guides", "Resource recommendations", "Follow-up scheduling"]
+      title: "AI Risk Summary",
+      description: "Based on your cognitive and speech assessment, the AI provides a summary of potential risk indicators. These insights highlight areas that may require closer attention or professional follow-up.",
+      details: ["Memory risk level", "Language and communication risk level", "Attention and focus risk level", "Executive function risk level"]
     }
   ];
 
@@ -126,19 +125,6 @@ const HowItWorks = () => {
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-foreground mb-6">Ready to Get Started?</h2>
-          <p className="text-lg text-muted-foreground mb-8">
-            Try our demo to see how simple and effective cognitive screening can be.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a href="/demo" className="btn-hero">Try Demo</a>
-            <a href="/contact" className="btn-secondary">Contact Us</a>
-          </div>
-        </div>
-      </section>
     </div>
   );
 };

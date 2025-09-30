@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { Menu, X, Brain } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const Navigation = () => {
@@ -13,7 +13,6 @@ const Navigation = () => {
     { href: "/how-it-works", label: "How It Works" },
     { href: "/features", label: "Features" },
     { href: "/assessment", label: "Assessment" },
-    { href: "/demo", label: "Demo" },
     { href: "/resources", label: "Resources" },
     { href: "/contact", label: "Contact" },
   ];
@@ -26,8 +25,8 @@ const Navigation = () => {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link to="/" className="flex items-center space-x-2 group">
-            <div className="p-2 bg-gradient-hero rounded-lg group-hover:scale-110 transition-transform duration-300">
-              <Brain className="h-6 w-6 text-white" />
+            <div className="h-10 w-10 flex items-center justify-center rounded-lg overflow-hidden bg-card group-hover:scale-110 transition-transform duration-300">
+              <img src="/logo.png" alt="Cog.ai logo" className="h-8 w-8 object-contain" />
             </div>
             <span className="text-xl font-bold text-gradient">Cog.ai</span>
           </Link>

@@ -44,7 +44,7 @@ const Features = () => {
         "Detailed clinical reports",
         "Visual progress tracking",
         "Printable and shareable formats"
-      ]
+      ],
     }
   ];
 
@@ -64,8 +64,9 @@ const Features = () => {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-brain">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="relative py-20 px-4 sm:px-6 lg:px-8 bg-gradient-brain overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/35 via-primary/10 to-secondary/40 opacity-80" />
+        <div className="relative max-w-4xl mx-auto text-center">
           <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-6 animate-fade-in">
             <span className="text-gradient">Cog.ai</span> Features
           </h1>
@@ -191,10 +192,10 @@ const Features = () => {
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-foreground mb-6">Experience These Features</h2>
           <p className="text-lg text-muted-foreground mb-8">
-            Try our interactive demo to see how these features work together to provide comprehensive cognitive health insights.
+            Jump into the assessment to see how these features work together to provide comprehensive cognitive health insights.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a href="/demo" className="btn-hero">Try Interactive Demo</a>
+            <a href="/assessment" className="btn-hero">Start Assessment</a>
             <a href="/contact" className="btn-secondary">Request Full Access</a>
           </div>
         </div>

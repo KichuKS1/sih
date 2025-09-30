@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Brain, Mail, Twitter, Linkedin, Github } from "lucide-react";
+import { Mail, Twitter, Linkedin, Github } from "lucide-react";
 
 const Footer = () => {
   return (
@@ -9,8 +9,8 @@ const Footer = () => {
           {/* Logo & Description */}
           <div className="col-span-1 md:col-span-2">
             <div className="flex items-center space-x-2 mb-4">
-              <div className="p-2 bg-gradient-hero rounded-lg">
-                <Brain className="h-6 w-6 text-white" />
+              <div className="h-10 w-10 flex items-center justify-center rounded-lg overflow-hidden bg-card">
+                <img src="/logo.png" alt="Cog.ai logo" className="h-8 w-8 object-contain" />
               </div>
               <span className="text-xl font-bold text-gradient">Cog.ai</span>
             </div>
@@ -35,8 +35,8 @@ const Footer = () => {
               <Link to="/features" className="block text-muted-foreground hover:text-primary transition-colors">
                 Features
               </Link>
-              <Link to="/demo" className="block text-muted-foreground hover:text-primary transition-colors">
-                Demo
+              <Link to="/assessment" className="block text-muted-foreground hover:text-primary transition-colors">
+                Assessment
               </Link>
             </div>
           </div>
@@ -51,7 +51,12 @@ const Footer = () => {
               <Link to="/contact" className="block text-muted-foreground hover:text-primary transition-colors">
                 Contact
               </Link>
-              <a href="#" className="block text-muted-foreground hover:text-primary transition-colors">
+              <a
+                href="https://www.freeprivacypolicy.com/live/2f8ae647-8c7a-4bbb-8311-bd01f9664f05"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-muted-foreground hover:text-primary transition-colors"
+              >
                 Privacy Policy
               </a>
               <a href="#" className="block text-muted-foreground hover:text-primary transition-colors">

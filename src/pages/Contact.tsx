@@ -61,20 +61,20 @@ const Contact = () => {
     {
       icon: Mail,
       title: "Email Us",
-      details: "nivedithavs2007@gmail.com",
+      details: "crezora777@gmail.com",
       description: "Send us an email and we'll respond within 24 hours"
     },
     {
       icon: Phone,
       title: "Call Us",
       details: "+91 1234567890",
-      description: "Monday to Friday, 9 AM to 6 PM  IST"
+      description: "Monday to Friday, 9 AM to 6 PM IST"
     },
     {
       icon: MapPin,
       title: "Visit Us",
-      details: "Sahrdaya College of Engineering And Technology",
-      description: "Kodakara,Thrissur,Kerala,India"
+      details: "Sahrdaya College of Engineering and Technology",
+      description: "Thrissur,Kerala"
     },
     {
       icon: Clock,
@@ -106,8 +106,9 @@ const Contact = () => {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-brain">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="relative py-20 px-4 sm:px-6 lg:px-8 bg-gradient-brain overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/35 via-primary/10 to-secondary/40 opacity-80" />
+        <div className="relative max-w-4xl mx-auto text-center">
           <h1 className="text-4xl sm:text-5xl font-bold text-foreground mb-6 animate-fade-in">
             Contact <span className="text-gradient">Cog.ai</span>
           </h1>
@@ -191,7 +192,7 @@ const Contact = () => {
                       >
                         <option value="">Select a topic</option>
                         <option value="general">General Inquiry</option>
-                        <option value="demo">Demo Request</option>
+                        <option value="assessment">Assessment Request</option>
                         <option value="healthcare">Healthcare Partnership</option>
                         <option value="technical">Technical Support</option>
                         <option value="research">Research Collaboration</option>

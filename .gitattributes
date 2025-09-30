@@ -6,3 +6,9 @@ backend/datasets/hindi/train-00003-of-00074.parquet filter=lfs diff=lfs merge=lf
 backend/datasets/hindi/train-00002-of-00074.parquet filter=lfs diff=lfs merge=lfs -text
 backend/datasets/hindi/train-00001-of-00074.parquet filter=lfs diff=lfs merge=lfs -text
 backend/datasets/hindi/train-00000-of-00074.parquet filter=lfs diff=lfs merge=lfs -text
+backend/.venv/Lib/site-packages/llvamlite/binding/llvmlite.dll filter=lfs diff=lfs merge=lfs -text
+backend/.venv/Lib/site-packages/llvamlite/torch/lib/dnnl.lib filter=lfs diff=lfs merge=lfs -text
+backend/.venv/Lib/site-packages/torch/lib/dnnl.lib filter=lfs diff=lfs merge=lfs -text
+backend/.venv/Lib/site-packages/torch/lib/torch_cpu.dll filter=lfs diff=lfs merge=lfs -text
+backend/.venv/Lib/site-packages/xgboost/lib/xgboost.dll filter=lfs diff=lfs merge=lfs -text
+backend/.venv/Lib/site-packages/llvmlite/binding/llvmlite.dll filter=lfs diff=lfs merge=lfs -text

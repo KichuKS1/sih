@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowRight, Play, Shield, Users, Brain, CheckCircle } from "lucide-react";
-import heroImage from "@/assets/hero-brain-network.jpg";
-
+import heroImage from "../assets/Background 1.png";
+import dementiaBackground from "../assets/dementia-background.png";
 
 const Index = () => {
   return (
@@ -10,7 +10,7 @@ const Index = () => {
       <section className="relative py-20 px-4 sm:px-6 lg:px-8 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-hero opacity-10"></div>
         <div 
-          className="absolute inset-0 bg-cover bg-center opacity-20"
+          className="absolute inset-0 bg-cover bg-center opacity-30"
           style={{ backgroundImage: `url(${heroImage})` }}
         ></div>
         
@@ -27,10 +27,10 @@ const Index = () => {
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center animate-scale-in">
               <Link 
-                to="/demo" 
+                to="/assessment" 
                 className="btn-hero inline-flex items-center space-x-2"
               >
-                <span>Get Started</span>
+                <span>Start Assessment</span>
                 <ArrowRight className="h-5 w-5" />
               </Link>
               <Link 
@@ -45,7 +45,6 @@ const Index = () => {
         </div>
       </section>
 
-
       {/* Why Cog Section */}
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-muted/50">
         <div className="max-w-6xl mx-auto">
@@ -55,7 +54,6 @@ const Index = () => {
               Transforming cognitive health through accessible AI technology
             </p>
           </div>
-
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
             {[
@@ -92,10 +90,14 @@ const Index = () => {
         </div>
       </section>
 
-
       {/* Demo Video Section */}
-      <section className="py-16 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-4xl mx-auto text-center">
+      <section className="relative py-16 px-4 sm:px-6 lg:px-8 overflow-hidden">
+        <div
+          className="absolute inset-0 opacity-75 bg-cover bg-center"
+          style={{ backgroundImage: `url(${dementiaBackground})` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-background/85 via-background/80 to-background/85" />
+        <div className="relative max-w-4xl mx-auto text-center">
           <h2 className="text-3xl font-bold text-foreground mb-8">What's Dementia ?</h2>
           
           <div className="relative bg-gradient-brain rounded-2xl p-8 shadow-card">
@@ -121,7 +123,6 @@ const Index = () => {
         </div>
       </section>
 
-
       {/* Trust Section */}
       <section className="py-16 px-4 sm:px-6 lg:px-8 bg-muted/50">
         <div className="max-w-6xl mx-auto">
@@ -131,7 +132,6 @@ const Index = () => {
               Built on cutting-edge machine learning and healthcare expertise
             </p>
           </div>
-
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="bg-card rounded-2xl p-8 shadow-soft">
@@ -145,7 +145,6 @@ const Index = () => {
                 Our algorithms are trained on extensive clinical datasets and validated through peer-reviewed research, ensuring accurate and reliable cognitive assessments.
               </p>
             </div>
-
 
             <div className="bg-card rounded-2xl p-8 shadow-soft">
               <div className="flex items-center space-x-3 mb-6">
@@ -165,7 +164,4 @@ const Index = () => {
   );
 };
 
-
 export default Index;
-
-
