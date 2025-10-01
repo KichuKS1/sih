@@ -62,46 +62,10 @@ export const SpeechRecorder = ({
     mediaRecorderRef.current?.stop();
   }, [stopTimer]);
 
-  const handleDataAvailable = useCallback(
-    async (event: BlobEvent) => {
-      if (!event.data.size || !currentTask) return;
-
-      chunksRef.current.push(event.data);
-      const blob = new Blob(chunksRef.current, { type: chunksRef.current[0]?.type || "audio/webm" });
-      const durationMs = elapsedMs;
-
-      try {
-        // retry up to 2 times on transient failures
-        let lastErr: unknown = undefined;
-        for (let i = 0; i < 3; i++) {
-          try {
-            await onUpload({ taskId: currentTask.id, blob, durationMs });
-            lastErr = undefined;
-            break;
-          } catch (e) {
-            lastErr = e;
-            await new Promise((r) => setTimeout(r, 600));
-          }
-        }
-        if (lastErr) throw lastErr;
-        chunksRef.current = [];
-
-        if (currentIndex < tasks.length - 1) {
-          setCurrentIndex((index) => index + 1);
-          setElapsedMs(0);
-        } else {
-          onComplete();
-        }
-      } catch (error) {
-        console.error(error);
-        toast({
-          title: "Upload failed",
-          description: "Could not upload speech sample. Please try again.",
-        });
-      }
-    },
-    [currentTask, currentIndex, elapsedMs, onComplete, onUpload, tasks.length],
-  );
+  const handleDataAvailable = useCallback((event: BlobEvent) => {
+    if (!event.data.size) return;
+    chunksRef.current.push(event.data);
+  }, []);
 
   const startRecording = async () => {
     try {
@@ -132,18 +96,59 @@ export const SpeechRecorder = ({
       rafRef.current = requestAnimationFrame(tick);
 
       recorder.addEventListener("dataavailable", handleDataAvailable);
-      recorder.addEventListener("stop", () => {
+      recorder.addEventListener("stop", async () => {
+        // Compute duration before clearing timer value
+        const stopNow = performance.now();
+        const durationMs =
+          startTimestampRef.current != null ? stopNow - startTimestampRef.current : elapsedMs;
+
+        // Close tracks and stop timer
         recorder.stream.getTracks().forEach((track) => track.stop());
         setIsRecording(false);
         stopTimer();
+
+        // Build final blob from accumulated chunks and upload
+        const blob = new Blob(chunksRef.current, {
+          type: chunksRef.current[0]?.type || "audio/webm",
+        });
+
+        try {
+          let lastErr: unknown = undefined;
+          for (let i = 0; i < 3; i++) {
+            try {
+              await onUpload({ taskId: currentTask.id, blob, durationMs });
+              lastErr = undefined;
+              break;
+            } catch (e) {
+              lastErr = e;
+              await new Promise((r) => setTimeout(r, 600));
+            }
+          }
+          if (lastErr) throw lastErr;
+          chunksRef.current = [];
+
+          if (currentIndex < tasks.length - 1) {
+            setCurrentIndex((index) => index + 1);
+            setElapsedMs(0);
+          } else {
+            onComplete();
+          }
+        } catch (error) {
+          console.error(error);
+          toast({
+            title: "Upload failed",
+            description: "Could not upload speech sample. Please try again.",
+          });
+        }
       });
 
-      // use a timeslice so dataavailable fires consistently
-      recorder.start(1000);
+      // start without timeslice; we'll finalize and upload on stop
+      recorder.start();
 
       if (currentTask.maxDurationMs) {
         setTimeout(() => {
           if (recorder.state === "recording") {
+            try { (recorder as any).requestData?.(); } catch {}
             recorder.stop();
           }
         }, currentTask.maxDurationMs);

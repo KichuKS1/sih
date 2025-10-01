@@ -83,7 +83,6 @@ const Contact = () => {
       description: "Our team is here to help around the clock"
     }
   ];
-
   const faqs = [
     {
       question: "Is Cog.ai a medical device?",
@@ -91,14 +90,13 @@ const Contact = () => {
     },
     {
       question: "How is my data protected?",
-      answer: "We use enterprise-grade encryption and follow HIPAA guidelines to protect your sensitive health information. Your data is never shared without your explicit consent."
+      answer: "We use enterprise-grade encryption and follow India's DPDPA guidelines to protect your sensitive health information. Your data is never shared without your explicit consent."
     },
     {
       question: "Can I share results with my doctor?",
       answer: "Yes! Our reports are designed to be easily shared with healthcare providers to support informed discussions about cognitive health."
     },
     {
-      question: "How often should I take assessments?",
       answer: "We recommend taking assessments every 3-6 months for ongoing monitoring, but your healthcare provider may suggest a different schedule based on your individual needs."
     }
   ];

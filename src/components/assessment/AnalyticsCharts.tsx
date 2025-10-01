@@ -91,10 +91,11 @@ export const AnalyticsCharts = forwardRef<HTMLDivElement, AnalyticsChartsProps>(
   }, [result]);
 
   const trend = useMemo(() => {
-    const sorted = [...history].sort(
+    const trendHistory = history && history.length > 0 ? history : [result];
+    const sorted = [...trendHistory].sort(
       (a, b) => new Date(a.generatedAt).getTime() - new Date(b.generatedAt).getTime(),
     );
-    const labels = sorted.map((r, i) => `${i + 1}`);
+    const labels = sorted.map((_, i) => `${i + 1}`);
     const prob = sorted.map((r) => Math.round(r.probability * 100));
     const memory = sorted.map((r) => r.subScores.memoryScore);
     const attention = sorted.map((r) => r.subScores.attentionScore);
@@ -111,6 +112,8 @@ export const AnalyticsCharts = forwardRef<HTMLDivElement, AnalyticsChartsProps>(
           borderColor: "#ef4444",
           backgroundColor: "rgba(239,68,68,0.15)",
           tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 5,
         },
         {
           label: "Memory",
@@ -118,6 +121,8 @@ export const AnalyticsCharts = forwardRef<HTMLDivElement, AnalyticsChartsProps>(
           borderColor: "#3b82f6",
           backgroundColor: "rgba(59,130,246,0.15)",
           tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 5,
         },
         {
           label: "Attention",
@@ -125,6 +130,8 @@ export const AnalyticsCharts = forwardRef<HTMLDivElement, AnalyticsChartsProps>(
           borderColor: "#f59e0b",
           backgroundColor: "rgba(245,158,11,0.15)",
           tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 5,
         },
         {
           label: "Language",
@@ -132,6 +139,8 @@ export const AnalyticsCharts = forwardRef<HTMLDivElement, AnalyticsChartsProps>(
           borderColor: "#10b981",
           backgroundColor: "rgba(16,185,129,0.15)",
           tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 5,
         },
         {
           label: "Executive",
@@ -139,10 +148,12 @@ export const AnalyticsCharts = forwardRef<HTMLDivElement, AnalyticsChartsProps>(
           borderColor: "#8b5cf6",
           backgroundColor: "rgba(139,92,246,0.15)",
           tension: 0.3,
+          pointRadius: 3,
+          pointHoverRadius: 5,
         },
       ],
     };
-  }, [history]);
+  }, [history, result]);
 
   return (
     <div ref={ref} className="grid gap-6 md:grid-cols-2">
@@ -181,7 +192,7 @@ export const AnalyticsCharts = forwardRef<HTMLDivElement, AnalyticsChartsProps>(
               responsive: true,
               maintainAspectRatio: false,
               scales: {
-                y: { beginAtZero: true },
+                y: { beginAtZero: true, suggestedMax: 4 },
                 y1: { beginAtZero: true, position: "right" as const, ticks: { callback: (v) => `${v}%` } },
               },
               plugins: { legend: { position: "bottom" as const } },

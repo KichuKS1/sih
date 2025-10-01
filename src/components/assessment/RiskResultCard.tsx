@@ -1,7 +1,6 @@
 import { useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { AssessmentResult } from "@/services/api";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
@@ -18,6 +17,15 @@ const RISK_COLOR_MAP: Record<AssessmentResult["riskLevel"], string> = {
 };
 
 export const RiskResultCard = ({ result, languageLabel }: RiskResultCardProps) => {
+  const formatFeatureName = (key: string) =>
+    key
+      .replace(/[_-]+/g, " ")
+      .trim()
+      .replace(/\s+/g, " ")
+      .split(" ")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+
   const riskClassName = RISK_COLOR_MAP[result.riskLevel];
   const confidence = Math.round(result.probability * 100);
 
@@ -56,9 +64,7 @@ export const RiskResultCard = ({ result, languageLabel }: RiskResultCardProps) =
     executive: Math.min(100, (dementiaBenchmark.executiveScore / domainMax.executiveScore) * 100),
   };
 
-  const printReport = () => {
-    window.print();
-  };
+  // printing removed from card; top-level print action can be added elsewhere if needed
 
   return (
     <Card id="risk-report" className="shadow-card">
@@ -67,7 +73,9 @@ export const RiskResultCard = ({ result, languageLabel }: RiskResultCardProps) =
           <span>Cognitive Health Summary</span>
           {languageLabel ? <Badge>{languageLabel}</Badge> : null}
         </CardTitle>
-        <CardDescription>Generated on {new Date(result.generatedAt).toLocaleString()}</CardDescription>
+        <CardDescription>
+          Generated on {new Date().toLocaleString()}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Probability donut + summary */}
@@ -103,7 +111,7 @@ export const RiskResultCard = ({ result, languageLabel }: RiskResultCardProps) =
             {result.featureImportances.map((feature) => (
               <div key={feature.feature} className="space-y-1">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium text-foreground">{feature.feature}</span>
+                  <span className="font-medium text-foreground">{formatFeatureName(feature.feature)}</span>
                   <span
                     className={cn(
                       "text-xs font-semibold",
@@ -181,9 +189,7 @@ export const RiskResultCard = ({ result, languageLabel }: RiskResultCardProps) =
           </ul>
         </div>
 
-        <div className="flex justify-end print:hidden">
-          <Button onClick={printReport} variant="outline">Download PDF</Button>
-        </div>
+        {/* Removed in-card Download PDF button */}
       </CardContent>
     </Card>
   );

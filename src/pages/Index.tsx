@@ -103,7 +103,7 @@ const Index = () => {
           <div className="relative bg-gradient-brain rounded-2xl p-8 shadow-card">
             <div className="bg-card rounded-xl p-6">
               <h3 className="text-2xl font-semibold text-foreground mb-6">
-                Watch Our Explainer Video
+                Explainer Video
               </h3>
               <div className="relative w-full aspect-video rounded-lg overflow-hidden shadow-lg">
                 <iframe
@@ -154,7 +154,7 @@ const Index = () => {
                 <h3 className="text-xl font-semibold text-foreground">Privacy First</h3>
               </div>
               <p className="text-muted-foreground">
-                Your data is encrypted and secure. We follow HIPAA guidelines and never share personal information without your explicit consent.
+                Your data is encrypted and secure. We follow India's DPDPA guidelines and never share personal information without your explicit consent.
               </p>
             </div>
           </div>

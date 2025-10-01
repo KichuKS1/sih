@@ -13,6 +13,7 @@ import Resources from "./pages/Resources";
 import Contact from "./pages/Contact";
 import NotFound from "./pages/NotFound";
 import Assessment from "./pages/Assessment";
+import Chatbot from "./components/Chatbot";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,8 @@ const App = () => (
             </Routes>
           </main>
           <Footer />
+          {/* Floating chatbot */}
+          <Chatbot />
         </div>
       </BrowserRouter>
     </TooltipProvider>

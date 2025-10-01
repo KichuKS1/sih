@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { Mail, Twitter, Linkedin, Github } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
 
 const Footer = () => {
   return (
@@ -59,8 +60,13 @@ const Footer = () => {
               >
                 Privacy Policy
               </a>
-              <a href="#" className="block text-muted-foreground hover:text-primary transition-colors">
-                Terms of Service
+              <a
+                href="https://www.freeprivacypolicy.com/live/15fb06da-cfcf-4fef-b1fd-2e359bc63d0c"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-muted-foreground hover:text-primary transition-colors"
+              >
+                Terms & Conditions
               </a>
             </div>
           </div>
@@ -69,16 +75,36 @@ const Footer = () => {
         {/* Social Links & Copyright */}
         <div className="border-t border-border mt-8 pt-8 flex flex-col sm:flex-row justify-between items-center">
           <div className="flex space-x-4 mb-4 sm:mb-0">
-            <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+            <a
+              href="#"
+              aria-label="Twitter"
+              onClick={(e) => { e.preventDefault(); toast({ title: "Coming soon", description: "Our Twitter/X is brewing ☕" }); }}
+              className="text-muted-foreground hover:text-primary transition-colors"
+            >
               <Twitter className="h-5 w-5" />
             </a>
-            <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+            <a
+              href="#"
+              aria-label="LinkedIn"
+              onClick={(e) => { e.preventDefault(); toast({ title: "Coming soon", description: "LinkedIn page launching shortly 🚀" }); }}
+              className="text-muted-foreground hover:text-primary transition-colors"
+            >
               <Linkedin className="h-5 w-5" />
             </a>
-            <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+            <a
+              href="#"
+              aria-label="GitHub"
+              onClick={(e) => { e.preventDefault(); toast({ title: "Coming soon", description: "Repos will go public soon 🔧" }); }}
+              className="text-muted-foreground hover:text-primary transition-colors"
+            >
               <Github className="h-5 w-5" />
             </a>
-            <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+            <a
+              href="#"
+              aria-label="Email"
+              onClick={(e) => { e.preventDefault(); toast({ title: "Coming soon", description: "Newsletter signups opening soon ✉️" }); }}
+              className="text-muted-foreground hover:text-primary transition-colors"
+            >
               <Mail className="h-5 w-5" />
             </a>
           </div>

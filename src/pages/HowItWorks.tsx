@@ -100,7 +100,6 @@ const HowItWorks = () => {
               Our approach combines scientific rigor with human-centered design
             </p>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               {
@@ -109,7 +108,7 @@ const HowItWorks = () => {
               },
               {
                 title: "Privacy-First",
-                description: "Your data stays secure with end-to-end encryption and HIPAA-compliant storage."
+                description: "Your data stays secure with end-to-end encryption and DPDPA-compliant storage."
               },
               {
                 title: "Accessible Design",
