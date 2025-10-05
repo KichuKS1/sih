@@ -266,6 +266,9 @@ const Assessment = () => {
           : "";
     if (message.includes("auth/email-already-in-use")) return "This email is already registered. Try logging in instead.";
     if (message.includes("auth/invalid-email")) return "That email address looks invalid.";
+    if (message.includes("auth/missing-email")) return "Enter an email address.";
+    if (message.includes("auth/missing-password")) return "Enter your password.";
+    if (message.includes("auth/weak-password")) return "Choose a password with at least 6 characters.";
     if (message.includes("auth/wrong-password")) return "Incorrect password. Please try again.";
     if (message.includes("auth/user-not-found")) return "No account found with that email. Sign up first.";
     if (message.includes("network")) return "Network issue—check your connection and try again.";
@@ -532,7 +535,9 @@ const Assessment = () => {
                         setAuth({ provider: "firebase", userId: u.uid, email: u.email || "" });
                         const arr = await loadReports(u.uid);
                         setHistory(arr);
-                        toast({ title: "Signed in with Google" });
+                        setAuthEmail("");
+                        setAuthPassword("");
+                        toast({ title: "Signed in with Google", description: "Onboarding is now unlocked." });
                       } catch (e) {
                         toast({ title: "Google sign-in failed", description: formatAuthError(e) });
                       }
@@ -541,10 +546,39 @@ const Assessment = () => {
                       <input type="email" placeholder="you@example.com" className="w-full px-3 py-2 rounded-lg border border-border bg-card text-foreground" value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} />
                       <input type="password" placeholder="Password" className="w-full px-3 py-2 rounded-lg border border-border bg-card text-foreground" value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} />
                       <Button variant="outline" onClick={async()=>{
-                        try { const u = await signInWithEmail(authEmail, authPassword); setAuth({ provider: "firebase", userId: u.uid, email: u.email || "" }); const arr = await loadReports(u.uid); setHistory(arr); toast({ title: "Logged in" }); } catch(e){ toast({ title: "Login failed", description: formatAuthError(e) }); }
+                        if (!authEmail || !authPassword) {
+                          toast({ title: "Missing credentials", description: "Enter both email and password." });
+                          return;
+                        }
+                        try {
+                          const u = await signInWithEmail(authEmail, authPassword);
+                          setAuth({ provider: "firebase", userId: u.uid, email: u.email || "" });
+                          const arr = await loadReports(u.uid);
+                          setHistory(arr);
+                          setAuthEmail("");
+                          setAuthPassword("");
+                          toast({ title: "Logged in", description: "Assessment steps unlocked." });
+                        } catch(e){
+                          toast({ title: "Login failed", description: formatAuthError(e) });
+                        }
                       }}>Log in</Button>
                       <Button className="btn-hero" onClick={async()=>{
-                        try { const u = await signUpWithEmail(authEmail, authPassword); setAuth({ provider: "firebase", userId: u.uid, email: u.email || "" }); setHistory([]); toast({ title: "Account created" }); } catch(e){ toast({ title: "Sign up failed", description: formatAuthError(e) }); }
+                        if (!authEmail || !authPassword) {
+                          toast({ title: "Missing credentials", description: "Enter both email and password." });
+                          return;
+                        }
+                        if (authPassword.length < 6) {
+                          toast({ title: "Weak password", description: "Password must be at least 6 characters." });
+                          return;
+                        }
+                        try {
+                          const u = await signUpWithEmail(authEmail, authPassword);
+                          setAuth({ provider: "firebase", userId: u.uid, email: u.email || "" });
+                          setHistory([]);
+                          setAuthEmail("");
+                          setAuthPassword("");
+                          toast({ title: "Account created", description: "You can now start onboarding." });
+                        } catch(e){ toast({ title: "Sign up failed", description: formatAuthError(e) }); }
                       }}>Sign up</Button>
                     </div>
                   </div>
