@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useUserSession } from "@/context/UserSessionContext";
+import { useUserSession, type UserProfile } from "@/context/UserSessionContext";
 import {
   registerUser,
   startAssessment,
@@ -11,6 +11,7 @@ import {
 } from "@/services/api";
 import { OnboardingForm, OnboardingFormValues } from "@/components/assessment/OnboardingForm";
 import { SpeechRecorder, SpeechTask } from "@/components/assessment/SpeechRecorder";
+import AnalysisLoading from "@/components/assessment/AnalysisLoading";
 import {
   CognitiveTasks,
   type CognitiveTask,
@@ -31,6 +32,7 @@ import { signInWithGoogle, signInWithEmail, signUpWithEmail, logoutFirebase, sav
 
 // Temporary: enable local heuristic inference while backend model is unavailable
 const USE_LOCAL_HEURISTIC = true;
+const ENABLE_BACKEND_APIS = import.meta.env.VITE_ENABLE_BACKEND === "true";
 
 const SPEECH_TASKS: SpeechTask[] = [
   {
@@ -39,21 +41,85 @@ const SPEECH_TASKS: SpeechTask[] = [
     description: "Describe the scene shown in the picture prompt in as much detail as possible.",
     prompt:
       "Imagine you are looking at a photo of a family cooking together in a kitchen. Describe everything you see.",
+    maxDurationMs: 120_000,
+    visualUrl: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4",
+  },
+  {
+    id: "story-immediate-recall",
+    title: "Story Recall (Immediate)",
+    description: "Listen to a narrated story and repeat everything you remember immediately.",
+    prompt:
+      "After hearing the story, retell it in your own words. Mention the key events, people, places, and any details that stood out.",
+    storyScript:
+      "Ravi woke up early on Sunday and decided to visit the weekly farmer's market. He bought fresh tomatoes, leafy spinach, and sweet mangoes for his mother. On the way out, he bumped into his old friend Sunil, who invited him for tea later that evening.",
+    maxDurationMs: 120_000,
+  },
+  {
+    id: "category-fluency",
+    title: "Verbal Fluency (Category)",
+    description: "Name as many items in the requested category as you can within one minute.",
+    prompt: "Say as many animal names as you can in one minute. Avoid repeating the same animal twice.",
+    fluencyType: "category",
+    fluencyTarget: "Animals",
+    maxDurationMs: 60_000,
+  },
+  {
+    id: "letter-fluency",
+    title: "Verbal Fluency (Letter)",
+    description: "Say as many words as you can that start with the given letter.",
+    prompt: "Say as many words as you can that begin with the letter 'K'. Avoid using names or repeating words.",
+    fluencyType: "letter",
+    fluencyTarget: "K",
+    maxDurationMs: 60_000,
+  },
+  {
+    id: "procedural-description",
+    title: "Explain a Routine",
+    description: "Walk through a familiar procedure step-by-step to capture sequencing and executive function.",
+    prompt:
+      "Explain how you would prepare your favorite breakfast, including all the steps, tools, and timing you rely on.",
     maxDurationMs: 90_000,
   },
   {
-    id: "story-recall",
-    title: "Story Recall",
-    description: "Listen to a short story and retell it in your own words.",
+    id: "guided-imagery",
+    title: "Guided Imagery",
+    description: "Imagine a calming place and describe it with rich sensory detail.",
     prompt:
-      "Recall a memorable event from your life and describe what happened, who was involved, and how it made you feel.",
-    maxDurationMs: 120_000,
+      "Close your eyes and picture your ideal peaceful location. Describe what you see, hear, smell, and feel as if you are truly there.",
+    maxDurationMs: 90_000,
+  },
+  {
+    id: "future-planning",
+    title: "Future Planning",
+    description: "Outline an upcoming day or event to evaluate sequencing and organization.",
+    prompt:
+      "Walk me through your plans for tomorrow from morning to night. Mention the people involved, places you'll go, and anything you need to remember.",
+    maxDurationMs: 90_000,
   },
   {
     id: "free-conversation",
     title: "Open Conversation",
-    description: "Speak freely about any topic of your choice for at least one minute.",
+    description: "Speak freely about how technology has changed communication in your lifetime.",
     prompt: "Share your thoughts about how technology has changed communication in your lifetime.",
+    maxDurationMs: 90_000,
+  },
+  {
+    id: "story-delayed-recall",
+    title: "Story Recall (Delayed)",
+    description: "After completing the other speech tasks, recall the same story again without hearing it.",
+    prompt:
+      "Describe the story you heard earlier, including who was involved, what happened, and any locations or objects mentioned.",
+    maxDurationMs: 120_000,
+    hideScriptDuringRecall: true,
+    unlockAfterTaskId: "story-immediate-recall",
+    unlockDelayMs: 3 * 60 * 1000,
+  },
+  {
+    id: "self-reflection",
+    title: "Self Reflection",
+    description: "Reflect on how the assessment felt and note any moments you found challenging.",
+    prompt:
+      "Share a brief reflection on which tasks felt easiest or hardest today and why you think that was the case.",
     maxDurationMs: 90_000,
   },
 ];
@@ -78,7 +144,7 @@ function makeWordRecallTask(id: string, title: string, words: string[]): Cogniti
 }
 
 function makeDigitSpanTask(id: string, title: string, digits: number[]): CognitiveTask {
-  const pool = shuffle(Array.from(new Set([...digits, ...shuffle([0,1,2,3,4,5,6,7,8,9]).slice(0, 5)])));
+  const pool = shuffle(Array.from(new Set([...digits, ...shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]).slice(0, 5)])));
   const options = pool.map(String);
   const sequenceAnswer = digits.map((d) => options.indexOf(String(d)));
   return {
@@ -96,12 +162,17 @@ const WORDS_BY_LANG: Record<string, string[]> = {
   en: ["Apple", "Train", "Moon", "Garden", "Candle", "Bridge", "Star", "Window", "River", "Mirror", "Bottle"],
   hi: ["सेब", "रेल", "चाँद", "बाग", "मोमबत्ती", "पुल", "तारा", "खिड़की", "नदी", "आईना", "बोतल"],
   bn: ["আপেল", "ট্রেন", "চাঁদ", "উদ্যান", "মোমবাতি", "সেতু", "তারকা", "জানালা", "নদী", "আয়না", "বোতল"],
-  ta: ["ஆப்பிள்", "ரயில்", "நிலா", "தோட்டம்", " மெழுகுவர்த்தி", "பாலம்", "நட்சத்திரம்", "ஜன்னல்", "நதி", "கண்ணாடி", "பாட்டில்"],
+  ta: ["ஆப்பிள்", "ரயில்", "நிலா", "தோட்டம்", "மெழுகுவர்த்தி", "பாலம்", "நட்சத்திரம்", "ஜன்னல்", "நதி", "கண்ணாடி", "பாட்டில்"],
+  te: ["సేపు", "రైలు", "చంద్రుడు", "తోట", "మొమబత్తి", "సేతు", "నక్షత్రం", "కిటికి", "నది", "అద్దం", "సీసా"],
+  kn: ["ಸೇಬು", "ರೈಲು", "ಚಂದ್ರ", "ತೋಟ", "ಮೆಣಬತ್ತಿ", "ಸೇತು", "ನಕ್ಷತ್ರ", "ಕಿಟಕೀ", "ನದಿ", "ಕನ್ನಡಿ", "ಸಿಸು"],
+  ml: ["ആപ്പിൾ", "ട്രെയ്ൻ", "ചന്ദ്രൻ", "തോട്ടം", "മെഴുകുതിരി", "പാലം", "നക്ഷത്രം", "ജാലകം", "നദി", "ക്കന്നാടി", "കുപ്പി"],
+  mr: ["सफरचंद", "रेल", "चंद्र", "बाग", "मेणबत्ती", "पूल", "तारा", "खिडकी", "नदी", "आरसा", "बाटली"],
+  gu: ["સફરજન", "રેલ", "ચંદ્ર", "બાગ", "મોમબત્તી", "પુલ", "તારો", "બારણું", "નદી", "અરીસો", "બોટલ"],
+  pa: ["ਸੇਬ", "ਰੇਲ", "ਚੰਦਰਮਾ", "ਬਾਗ", "ਮੋਮਬੱਤੀ", "ਪੁੱਲ", "ਤਾਰਾ", "ਖਿੜਕੀ", "ਨਦੀ", "ਸ਼ੀਸ਼ਾ", "ਬੋਤਲ"],
 };
 
 function generateCognitiveTasks(language: string): CognitiveTask[] {
   const lex = WORDS_BY_LANG[language] ?? WORDS_BY_LANG.en;
-  // Word pools (unique per session)
   const poolA = shuffle(lex).slice(0, 5);
   const poolB = shuffle(lex.filter((w) => !poolA.includes(w))).slice(0, 5);
 
@@ -186,18 +257,100 @@ const Assessment = () => {
   const [result, setResult] = useState<AssessmentResult | null>(null);
   const cognitiveTasks = useMemo(() => generateCognitiveTasks(user?.language || "en"), [user?.language]);
   const [isResultPending, setIsResultPending] = useState(false);
+  const [isAnalysisComplete, setIsAnalysisComplete] = useState(false);
   const [history, setHistory] = useState<AssessmentResult[]>([]);
   const reportRef = useRef<HTMLDivElement>(null);
   const [speechDurations, setSpeechDurations] = useState<Record<string, number>>({});
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const progressIntervalRef = useRef<number | null>(null);
+  const progressTimeoutRef = useRef<number | null>(null);
+  const minimumDurationRef = useRef<number | null>(null);
+  const analysisStartTimeRef = useRef<number | null>(null);
 
   const activeStep = STEP_CONFIG[activeStepIndex];
   const isCloudSignedIn = auth?.provider === "firebase";
+  const isOfflineMode = !ENABLE_BACKEND_APIS;
+  const onboardingUnlocked = isOfflineMode || isCloudSignedIn;
 
   useEffect(() => {
     setResult(null);
+    setAnalysisProgress(0);
+    setIsAnalysisComplete(false);
   }, [assessmentId]);
+
+  const clearAnalysisTimers = useCallback(() => {
+    if (progressIntervalRef.current !== null) {
+      window.clearInterval(progressIntervalRef.current);
+      progressIntervalRef.current = null;
+    }
+    if (progressTimeoutRef.current !== null) {
+      window.clearTimeout(progressTimeoutRef.current);
+      progressTimeoutRef.current = null;
+    }
+    if (minimumDurationRef.current !== null) {
+      window.clearTimeout(minimumDurationRef.current);
+      minimumDurationRef.current = null;
+    }
+    analysisStartTimeRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    if (!isResultPending) {
+      clearAnalysisTimers();
+      return;
+    }
+
+    clearAnalysisTimers();
+    setAnalysisProgress(12);
+    setIsAnalysisComplete(false);
+    analysisStartTimeRef.current = Date.now();
+    minimumDurationRef.current = window.setTimeout(() => {
+      minimumDurationRef.current = null;
+    }, 10_000);
+    progressIntervalRef.current = window.setInterval(() => {
+      setAnalysisProgress((prev) => {
+        const increment = Math.random() * 12 + 5;
+        const next = Math.min(prev + increment, 92);
+        if (next >= 92 && progressIntervalRef.current !== null) {
+          window.clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+        }
+        return next;
+      });
+    }, 900);
+
+    return () => {
+      clearAnalysisTimers();
+    };
+  }, [isResultPending, clearAnalysisTimers]);
+
+  const finalizeAnalysis = useCallback(() => {
+    const releaseResults = () => {
+      clearAnalysisTimers();
+      setAnalysisProgress(100);
+      progressTimeoutRef.current = window.setTimeout(() => {
+        setIsResultPending(false);
+        setIsAnalysisComplete(true);
+        setAnalysisProgress(0);
+        progressTimeoutRef.current = null;
+        analysisStartTimeRef.current = null;
+      }, 800);
+    };
+
+    if (minimumDurationRef.current === null) {
+      releaseResults();
+    } else {
+      const elapsed = analysisStartTimeRef.current ? Date.now() - analysisStartTimeRef.current : 0;
+      const remaining = Math.max(0, 10_000 - elapsed);
+      window.clearTimeout(minimumDurationRef.current);
+      minimumDurationRef.current = null;
+      progressTimeoutRef.current = window.setTimeout(() => {
+        releaseResults();
+      }, remaining);
+    }
+  }, [analysisProgress, clearAnalysisTimers]);
 
   useEffect(() => {
     (async () => {
@@ -276,6 +429,9 @@ const Assessment = () => {
   };
 
   const requireCloudSignIn = () => {
+    if (isOfflineMode) {
+      return false;
+    }
     if (!isCloudSignedIn) {
       toast({
         title: "Sign in required",
@@ -286,10 +442,41 @@ const Assessment = () => {
     return false;
   };
 
+  const createOfflineSession = useCallback(
+    (values: OnboardingFormValues, reason?: string) => {
+      const offlineAssessmentId = `offline-${Date.now()}`;
+      const offlineUser: UserProfile = {
+        id: offlineAssessmentId,
+        name: values.name,
+        age: values.age,
+        language: values.language,
+        consent: values.consent,
+      };
+      setUser(offlineUser);
+      setAssessmentId(offlineAssessmentId);
+      toast({
+        title: "Consent stored locally",
+        description:
+          reason ??
+          "You are in privacy-first mode. Your details stay on this device so you can continue safely.",
+      });
+      advanceStep();
+    },
+    [advanceStep, setAssessmentId, setUser],
+  );
+
   const handleOnboardingSubmit = async (values: OnboardingFormValues) => {
-    if (requireCloudSignIn()) return;
+    setIsLoading(true);
+    if (!ENABLE_BACKEND_APIS) {
+      createOfflineSession(values);
+      setIsLoading(false);
+      return;
+    }
+    if (requireCloudSignIn()) {
+      setIsLoading(false);
+      return;
+    }
     try {
-      setIsLoading(true);
       const payload = {
         name: values.name,
         age: values.age,
@@ -315,10 +502,7 @@ const Assessment = () => {
       advanceStep();
     } catch (error) {
       console.error(error);
-      toast({
-        title: "Could not register",
-        description: error instanceof Error ? error.message : "Please try again later.",
-      });
+      createOfflineSession(values, "Backend unavailable. Switched to privacy-first mode and kept your data local.");
     } finally {
       setIsLoading(false);
     }
@@ -330,6 +514,15 @@ const Assessment = () => {
       toast({
         title: "Assessment not started",
         description: "Please complete onboarding first.",
+      });
+      return;
+    }
+
+    if (!ENABLE_BACKEND_APIS) {
+      setSpeechDurations((prev) => ({ ...prev, [taskId]: durationMs }));
+      toast({
+        title: "Speech sample saved locally",
+        description: `Recorded ${Math.round(durationMs / 1000)} seconds for ${taskId}. Nothing was uploaded.`,
       });
       return;
     }
@@ -387,17 +580,19 @@ const Assessment = () => {
       setIsResultPending(true);
 
       // Always persist cognitive data to backend if available (non-blocking for heuristic mode)
-      try {
-        await submitCognitiveData(
-          {
-            assessmentId,
-            logs,
-            cognitiveScores: scores,
-            clockDrawing,
-          },
-          user.accessToken,
-        );
-      } catch {}
+      if (ENABLE_BACKEND_APIS && user.accessToken) {
+        try {
+          await submitCognitiveData(
+            {
+              assessmentId,
+              logs,
+              cognitiveScores: scores,
+              clockDrawing,
+            },
+            user.accessToken,
+          );
+        } catch {}
+      }
 
       if (USE_LOCAL_HEURISTIC) {
         // Simple heuristic without ML: combine normalized cognitive scores and speech coverage
@@ -456,19 +651,24 @@ const Assessment = () => {
             setHistory(loadAssessmentHistory(user.id));
           }
         } catch {}
-        setIsResultPending(false);
+        finalizeAnalysis();
         return;
       }
 
       // Otherwise, call backend prediction and poll
-      try {
-        await requestRiskPrediction(assessmentId, user.accessToken);
-      } catch {}
+      if (ENABLE_BACKEND_APIS && user.accessToken) {
+        try {
+          await requestRiskPrediction(assessmentId, user.accessToken);
+        } catch {}
+      }
 
       const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
       let fetched: AssessmentResult | null = null;
       for (let i = 0; i < 15; i++) {
         try {
+          if (!ENABLE_BACKEND_APIS || !user.accessToken) {
+            break;
+          }
           fetched = await fetchAssessmentResult(assessmentId, user.accessToken);
           break;
         } catch (err) {
@@ -491,14 +691,15 @@ const Assessment = () => {
             setHistory(loadAssessmentHistory(user.id));
           }
         } catch {}
+        finalizeAnalysis();
       } else {
         toast({ title: "Prediction pending", description: "Result is taking longer than usual. Please wait a few seconds and retry." });
+        finalizeAnalysis();
       }
-      setIsResultPending(false);
     } catch (error) {
       console.error(error);
       toast({ title: "Prediction failed", description: error instanceof Error ? error.message : "Please try again later." });
-      setIsResultPending(false);
+      finalizeAnalysis();
     } finally {
       setIsLoading(false);
     }
@@ -681,15 +882,8 @@ const Assessment = () => {
 
         {activeStep.id === "results" && (
           <div className="space-y-6">
-            {isResultPending && (
-              <div className="flex flex-col items-center justify-center space-y-4 rounded-xl border border-dashed p-10 text-center">
-                <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                <p className="text-muted-foreground">
-                  Running multi-modal analysis. This typically takes 20-30 seconds.
-                </p>
-              </div>
-            )}
-            {result && (
+            {isResultPending && <AnalysisLoading progress={analysisProgress} />}
+            {!isResultPending && isAnalysisComplete && result && (
               <>
                 <div ref={reportRef} className="space-y-6">
                   <RiskResultCard result={result} languageLabel={languageLabel} />

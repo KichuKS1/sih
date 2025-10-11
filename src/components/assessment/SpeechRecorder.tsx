@@ -17,6 +17,13 @@ export interface SpeechTask {
   description: string;
   prompt: string;
   maxDurationMs?: number;
+  visualUrl?: string;
+  storyScript?: string;
+  fluencyType?: "category" | "letter";
+  fluencyTarget?: string;
+  hideScriptDuringRecall?: boolean;
+  unlockAfterTaskId?: string;
+  unlockDelayMs?: number;
 }
 
 interface SpeechRecorderProps {
@@ -27,9 +34,33 @@ interface SpeechRecorderProps {
     taskId: string;
     blob: Blob;
     durationMs: number;
+    metadata?: Record<string, unknown>;
   }) => Promise<void>;
   onComplete: () => void;
 }
+
+const LOCK_POLL_INTERVAL = 500;
+
+const VOICE_LOCALE_MAP: Record<string, string> = {
+  en: "en-US",
+  hi: "hi-IN",
+  bn: "bn-IN",
+  ta: "ta-IN",
+  te: "te-IN",
+  kn: "kn-IN",
+  ml: "ml-IN",
+  mr: "mr-IN",
+  gu: "gu-IN",
+  pa: "pa-IN",
+};
+
+const formatCountdown = (ms: number) => {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes <= 0) return `${seconds}s`;
+  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
+};
 
 export const SpeechRecorder = ({
   language,
@@ -41,10 +72,37 @@ export const SpeechRecorder = ({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isRecording, setIsRecording] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [lockRemainingMs, setLockRemainingMs] = useState<number | null>(null);
+  const [isNarrating, setIsNarrating] = useState(false);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const rafRef = useRef<number>();
   const startTimestampRef = useRef<number | null>(null);
+  const autoStopTimeoutRef = useRef<number | null>(null);
+  const autoStopTriggeredRef = useRef(false);
+  const taskVisibleAtRef = useRef<Record<string, number>>({});
+  const prepDurationRef = useRef<Record<string, number>>({});
+  const statsRef = useRef<Record<string, { starts: number; autoStops: number }>>({});
+  const storyPlaybackRef = useRef<Record<string, number>>({});
+  const storyStartedRef = useRef<Record<string, boolean>>({});
+
+  const [availableAtMap, setAvailableAtMap] = useState<Record<string, number>>(() => {
+    const now = Date.now();
+    return tasks.reduce<Record<string, number>>((acc, task) => {
+      acc[task.id] = task.unlockAfterTaskId ? Number.POSITIVE_INFINITY : now;
+      return acc;
+    }, {});
+  });
+
+  const dependencyMap = useMemo(() => {
+    return tasks.reduce<Record<string, SpeechTask[]>>((acc, task) => {
+      if (!task.unlockAfterTaskId) return acc;
+      if (!acc[task.unlockAfterTaskId]) acc[task.unlockAfterTaskId] = [];
+      acc[task.unlockAfterTaskId].push(task);
+      return acc;
+    }, {});
+  }, [tasks]);
 
   const currentTask = useMemo(() => tasks[currentIndex], [tasks, currentIndex]);
 
@@ -54,28 +112,133 @@ export const SpeechRecorder = ({
       rafRef.current = undefined;
     }
     startTimestampRef.current = null;
+    if (autoStopTimeoutRef.current !== null) {
+      window.clearTimeout(autoStopTimeoutRef.current);
+      autoStopTimeoutRef.current = null;
+    }
   }, []);
-
-  useEffect(() => () => {
-    stopTimer();
-    mediaRecorderRef.current?.stream.getTracks().forEach((track) => track.stop());
-    mediaRecorderRef.current?.stop();
-  }, [stopTimer]);
 
   const handleDataAvailable = useCallback((event: BlobEvent) => {
     if (!event.data.size) return;
     chunksRef.current.push(event.data);
   }, []);
 
+  const stopNarration = useCallback(() => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsNarrating(false);
+  }, []);
+
+  const playNarration = useCallback(() => {
+    if (!currentTask?.storyScript) return;
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      toast({
+        title: "Narration unavailable",
+        description: "Your browser does not support speech synthesis. Please read the story text manually.",
+      });
+      return;
+    }
+    stopNarration();
+    const utterance = new SpeechSynthesisUtterance(currentTask.storyScript);
+    const locale = VOICE_LOCALE_MAP[language] ?? "en-US";
+    utterance.lang = locale;
+    utterance.rate = 0.95;
+    utterance.onstart = () => setIsNarrating(true);
+    utterance.onend = () => setIsNarrating(false);
+    utterance.onerror = () => setIsNarrating(false);
+    storyPlaybackRef.current[currentTask.id] = (storyPlaybackRef.current[currentTask.id] ?? 0) + 1;
+    window.speechSynthesis.speak(utterance);
+  }, [currentTask, language, stopNarration]);
+
+  useEffect(() => {
+    const now = Date.now();
+    setAvailableAtMap((prev) => {
+      const next = { ...prev };
+      tasks.forEach((task) => {
+        if (next[task.id] === undefined) {
+          next[task.id] = task.unlockAfterTaskId ? Number.POSITIVE_INFINITY : now;
+        }
+      });
+      return next;
+    });
+  }, [tasks]);
+
+  useEffect(() => {
+    if (!currentTask) return;
+    taskVisibleAtRef.current[currentTask.id] = Date.now();
+    autoStopTriggeredRef.current = false;
+    storyStartedRef.current[currentTask.id] = storyStartedRef.current[currentTask.id] ?? false;
+    setIsNarrating(false);
+  }, [currentTask]);
+
+  useEffect(() => {
+    return () => {
+      stopTimer();
+      stopNarration();
+      mediaRecorderRef.current?.stream.getTracks().forEach((track) => track.stop());
+      mediaRecorderRef.current?.stop();
+    };
+  }, [stopNarration, stopTimer]);
+
+  useEffect(() => {
+    if (!currentTask) {
+      setLockRemainingMs(null);
+      return;
+    }
+
+    if (!currentTask.unlockAfterTaskId) {
+      setLockRemainingMs(null);
+      return;
+    }
+
+    const updateLock = () => {
+      const unlockAt = availableAtMap[currentTask.id] ?? Date.now();
+      const remaining = unlockAt - Date.now();
+      setLockRemainingMs(remaining > 0 ? remaining : 0);
+    };
+
+    updateLock();
+    const interval = window.setInterval(updateLock, LOCK_POLL_INTERVAL);
+    return () => window.clearInterval(interval);
+  }, [currentTask, availableAtMap]);
+
+  const unlockDependents = useCallback(
+    (taskId: string) => {
+      const dependents = dependencyMap[taskId];
+      if (!dependents?.length) return;
+      const now = Date.now();
+      setAvailableAtMap((prev) => {
+        const next = { ...prev };
+        dependents.forEach((task) => {
+          const unlockAt = now + (task.unlockDelayMs ?? 0);
+          next[task.id] = unlockAt;
+        });
+        return next;
+      });
+    },
+    [dependencyMap],
+  );
+
+  const isLocked = useMemo(() => {
+    if (!currentTask) return false;
+    if (lockRemainingMs === null) return false;
+    return lockRemainingMs > 0;
+  }, [currentTask, lockRemainingMs]);
+
   const startRecording = async () => {
+    if (!currentTask) return;
+    if (isLocked) {
+      toast({
+        title: "Hold on",
+        description: "This recall task unlocks after the scheduled delay. Please wait for the countdown.",
+      });
+      return;
+    }
     try {
+      stopNarration();
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // pick a supported mime type for best compatibility
-      const candidates = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
-        "audio/ogg;codecs=opus",
-      ];
+      const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus"];
       const mimeType = candidates.find((t) => (window as any).MediaRecorder?.isTypeSupported?.(t)) || candidates[0];
 
       const recorder = new MediaRecorder(stream, { mimeType });
@@ -85,6 +248,15 @@ export const SpeechRecorder = ({
       setIsRecording(true);
       setElapsedMs(0);
       startTimestampRef.current = performance.now();
+      autoStopTriggeredRef.current = false;
+      storyStartedRef.current[currentTask.id] = true;
+
+      const visibleAt = taskVisibleAtRef.current[currentTask.id] ?? Date.now();
+      prepDurationRef.current[currentTask.id] = Date.now() - visibleAt;
+      statsRef.current[currentTask.id] = {
+        starts: (statsRef.current[currentTask.id]?.starts ?? 0) + 1,
+        autoStops: statsRef.current[currentTask.id]?.autoStops ?? 0,
+      };
 
       const tick = () => {
         if (startTimestampRef.current) {
@@ -97,35 +269,47 @@ export const SpeechRecorder = ({
 
       recorder.addEventListener("dataavailable", handleDataAvailable);
       recorder.addEventListener("stop", async () => {
-        // Compute duration before clearing timer value
         const stopNow = performance.now();
         const durationMs =
           startTimestampRef.current != null ? stopNow - startTimestampRef.current : elapsedMs;
 
-        // Close tracks and stop timer
         recorder.stream.getTracks().forEach((track) => track.stop());
         setIsRecording(false);
         stopTimer();
 
-        // Build final blob from accumulated chunks and upload
         const blob = new Blob(chunksRef.current, {
           type: chunksRef.current[0]?.type || "audio/webm",
         });
 
+        const stats = statsRef.current[currentTask.id] ?? { starts: 1, autoStops: 0 };
+        const metadata: Record<string, unknown> = {
+          restarts: stats.starts,
+          autoStopCount: stats.autoStops,
+          autoStopTriggered: autoStopTriggeredRef.current,
+          prepTimeMs: prepDurationRef.current[currentTask.id] ?? null,
+          fluencyType: currentTask.fluencyType ?? null,
+          fluencyTarget: currentTask.fluencyTarget ?? null,
+          storyLength: currentTask.storyScript?.length ?? null,
+          storyPlaybackCount: storyPlaybackRef.current[currentTask.id] ?? 0,
+          language,
+        };
+
         try {
-          let lastErr: unknown = undefined;
-          for (let i = 0; i < 3; i++) {
+          let lastError: unknown;
+          for (let attempt = 0; attempt < 3; attempt++) {
             try {
-              await onUpload({ taskId: currentTask.id, blob, durationMs });
-              lastErr = undefined;
+              await onUpload({ taskId: currentTask.id, blob, durationMs, metadata });
+              lastError = undefined;
               break;
-            } catch (e) {
-              lastErr = e;
-              await new Promise((r) => setTimeout(r, 600));
+            } catch (error) {
+              lastError = error;
+              await new Promise((resolve) => setTimeout(resolve, 600));
             }
           }
-          if (lastErr) throw lastErr;
+          if (lastError) throw lastError;
+
           chunksRef.current = [];
+          unlockDependents(currentTask.id);
 
           if (currentIndex < tasks.length - 1) {
             setCurrentIndex((index) => index + 1);
@@ -137,18 +321,24 @@ export const SpeechRecorder = ({
           console.error(error);
           toast({
             title: "Upload failed",
-            description: "Could not upload speech sample. Please try again.",
+            description: error instanceof Error ? error.message : "Could not upload speech sample.",
           });
         }
       });
 
-      // start without timeslice; we'll finalize and upload on stop
       recorder.start();
 
       if (currentTask.maxDurationMs) {
-        setTimeout(() => {
+        autoStopTimeoutRef.current = window.setTimeout(() => {
           if (recorder.state === "recording") {
-            try { (recorder as any).requestData?.(); } catch {}
+            autoStopTriggeredRef.current = true;
+            statsRef.current[currentTask.id] = {
+              starts: statsRef.current[currentTask.id]?.starts ?? 1,
+              autoStops: (statsRef.current[currentTask.id]?.autoStops ?? 0) + 1,
+            };
+            try {
+              (recorder as any).requestData?.();
+            } catch {}
             recorder.stop();
           }
         }, currentTask.maxDurationMs);
@@ -165,8 +355,9 @@ export const SpeechRecorder = ({
   const stopRecording = () => {
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state === "recording") {
-      // Ask for the final data chunk before stopping
-      try { (recorder as any).requestData?.(); } catch {}
+      try {
+        (recorder as any).requestData?.();
+      } catch {}
       recorder.stop();
     }
   };
@@ -178,6 +369,10 @@ export const SpeechRecorder = ({
   if (!currentTask) {
     return null;
   }
+
+  const showStoryScript = currentTask.storyScript && !(currentTask.hideScriptDuringRecall && (isRecording || storyStartedRef.current?.[currentTask.id]));
+  const countdownText = lockRemainingMs !== null ? formatCountdown(lockRemainingMs) : "Complete the prerequisite task to unlock.";
+  const canNarrate = typeof window !== "undefined" && "speechSynthesis" in window;
 
   return (
     <Card className="shadow-card">
@@ -191,16 +386,33 @@ export const SpeechRecorder = ({
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="rounded-lg border p-4 bg-muted/30">
+        {currentTask.visualUrl && (
+          <div className="overflow-hidden rounded-xl border bg-muted/40">
+            <img src={currentTask.visualUrl} alt="Speech prompt visual" className="h-64 w-full object-cover" />
+          </div>
+        )}
+
+        <div className="rounded-lg border p-4 bg-muted/30 space-y-2">
           <p className="text-sm text-muted-foreground">
             <span className="font-semibold text-foreground">Prompt:</span> {currentTask.prompt}
           </p>
+          {currentTask.fluencyType && currentTask.fluencyTarget && (
+            <p className="text-xs uppercase tracking-widest text-primary">Focus: rapid {currentTask.fluencyType} fluency · "{currentTask.fluencyTarget}"</p>
+          )}
+          {showStoryScript && currentTask.storyScript && (
+            <blockquote className="rounded-lg border-l-2 border-primary/60 bg-background p-4 text-sm text-muted-foreground">
+              {currentTask.storyScript}
+            </blockquote>
+          )}
+          {isLocked && (
+            <div className="rounded-md border border-amber-500/50 bg-amber-100/40 p-3 text-amber-700 text-sm">
+              Delayed recall unlocks in <strong>{countdownText}</strong>
+            </div>
+          )}
         </div>
 
         <div className="space-y-3 text-center">
-          <div className="text-3xl font-mono font-semibold">
-            {(elapsedMs / 1000).toFixed(1)}s
-          </div>
+          <div className="text-3xl font-mono font-semibold">{(elapsedMs / 1000).toFixed(1)}s</div>
           {progress !== undefined && <Progress value={progress} />}
         </div>
 
@@ -209,11 +421,27 @@ export const SpeechRecorder = ({
             type="button"
             size="lg"
             onClick={isRecording ? stopRecording : startRecording}
-            disabled={isUploading}
+            disabled={isUploading || isLocked}
             className={isRecording ? "bg-destructive text-destructive-foreground" : undefined}
           >
             {isRecording ? "Stop Recording" : "Start Recording"}
           </Button>
+          {currentTask.storyScript && !isRecording && (
+            <Button
+              type="button"
+              size="lg"
+              variant="outline"
+              onClick={isNarrating ? stopNarration : playNarration}
+              disabled={!canNarrate}
+            >
+              {isNarrating ? "Stop Story" : "Play Story"}
+            </Button>
+          )}
+          {!isRecording && !isLocked && (
+            <p className="text-xs text-muted-foreground">
+              Prep time is being tracked automatically. Begin when you're ready.
+            </p>
+          )}
         </div>
 
         <div className="text-sm text-muted-foreground text-center">

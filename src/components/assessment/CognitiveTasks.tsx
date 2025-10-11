@@ -42,6 +42,13 @@ interface TaskState {
   sequence?: number[];
 }
 
+const createTaskState = (): TaskState => ({
+  startTime: null,
+  responseTimeMs: 0,
+  correct: null,
+  errors: 0,
+});
+
 export const CognitiveTasks = ({ tasks, onComplete, isSubmitting }: CognitiveTasksProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [taskStates, setTaskStates] = useState<Record<string, TaskState>>({});
@@ -49,21 +56,56 @@ export const CognitiveTasks = ({ tasks, onComplete, isSubmitting }: CognitiveTas
   const currentTask = useMemo(() => tasks[currentIndex], [tasks, currentIndex]);
 
   const startTaskTimer = (taskId: string) => {
-    setTaskStates((prev) => ({
-      ...prev,
-      [taskId]: {
-        ...(prev[taskId] ?? { responseTimeMs: 0, correct: null, errors: 0 }),
-        startTime: performance.now(),
-      },
-    }));
+    setTaskStates((prev) => {
+      const existing = prev[taskId];
+      if (existing?.startTime) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [taskId]: {
+          ...(existing ?? createTaskState()),
+          startTime: performance.now(),
+        },
+      };
+    });
   };
 
-  const completeTask = async (taskId: string, overrides?: Partial<TaskState>) => {
-    setTaskStates((prev) => {
-      const currentState = prev[taskId];
-      if (!currentState?.startTime) return prev;
+  const getTaskState = (taskId: string): TaskState | undefined => taskStates[taskId];
 
-      const responseTimeMs = overrides?.responseTimeMs ?? performance.now() - currentState.startTime;
+  const hasRequiredResponse = (task: CognitiveTask): boolean => {
+    const state = getTaskState(task.id);
+    if (task.sequenceAnswer) {
+      return (state?.sequence?.length ?? 0) === task.sequenceAnswer.length;
+    }
+    if (task.options && task.options.length > 0) {
+      return typeof state?.selectedOption === "number";
+    }
+    if (task.type === "clock-drawing") {
+      return Boolean(state?.freeResponse?.trim().length);
+    }
+    return true;
+  };
+
+  const canCompleteTask = (task: CognitiveTask): boolean => {
+    if (isFinished) {
+      return false;
+    }
+    if (task.type === "clock-drawing") {
+      return hasRequiredResponse(task);
+    }
+    const state = getTaskState(task.id);
+    if (!state?.startTime) {
+      return false;
+    }
+    return hasRequiredResponse(task);
+  };
+
+  const completeTask = (taskId: string, overrides?: Partial<TaskState>) => {
+    setTaskStates((prev) => {
+      const currentState = prev[taskId] ?? createTaskState();
+      const startedAt = currentState.startTime ?? performance.now();
+      const responseTimeMs = overrides?.responseTimeMs ?? performance.now() - startedAt;
 
       return {
         ...prev,
@@ -77,53 +119,50 @@ export const CognitiveTasks = ({ tasks, onComplete, isSubmitting }: CognitiveTas
     });
 
     if (currentIndex < tasks.length - 1) {
-      setCurrentIndex((index) => index + 1);
+      setCurrentIndex((index) => Math.min(index + 1, tasks.length - 1));
     } else {
       setIsFinished(true);
     }
   };
 
   const handleOptionSelect = (task: CognitiveTask, optionIndex: number) => {
-    if (!taskStates[task.id]?.startTime) {
+    const state = taskStates[task.id];
+    if (!state?.startTime) {
       toast({ title: "Start the task first", description: "Press Begin before answering." });
       return;
     }
 
-    // Sequence mode: accumulate ordered selections without auto-complete
     if (task.sequenceAnswer && task.options) {
       setTaskStates((prev) => {
-        const cur: TaskState = prev[task.id] ?? {
-          startTime: null,
-          responseTimeMs: 0,
-          correct: null,
-          errors: 0,
-        };
-        const seq = cur.sequence ?? [];
-        // prevent duplicates and limit length
-        if (seq.includes(optionIndex) || seq.length >= task.sequenceAnswer!.length) {
+        const current = prev[task.id] ?? createTaskState();
+        const sequence = current.sequence ?? [];
+        if (sequence.includes(optionIndex) || sequence.length >= task.sequenceAnswer!.length) {
           return prev;
         }
+
         return {
           ...prev,
           [task.id]: {
-            ...cur,
-            sequence: [...seq, optionIndex],
+            ...current,
+            sequence: [...sequence, optionIndex],
           },
         };
       });
       return;
     }
 
-    // Single-choice mode
     const isCorrect = task.correctAnswer !== undefined ? optionIndex === task.correctAnswer : null;
-    setTaskStates((prev) => ({
-      ...prev,
-      [task.id]: {
-        ...(prev[task.id] ?? { startTime: null, responseTimeMs: 0, correct: null, errors: 0 }),
-        selectedOption: optionIndex,
-        correct: isCorrect,
-      },
-    }));
+    setTaskStates((prev) => {
+      const current = prev[task.id] ?? createTaskState();
+      return {
+        ...prev,
+        [task.id]: {
+          ...current,
+          selectedOption: optionIndex,
+          correct: isCorrect,
+        },
+      };
+    });
 
     completeTask(task.id, { correct: isCorrect, selectedOption: optionIndex });
   };
@@ -131,35 +170,39 @@ export const CognitiveTasks = ({ tasks, onComplete, isSubmitting }: CognitiveTas
   const handleFinish = async () => {
     try {
       const logs: InteractionLog[] = tasks.map((task) => {
-        const state = taskStates[task.id];
-        const metadata = task.sequenceAnswer
-          ? {
-              expectedSequence: task.sequenceAnswer,
-              selectedSequence: state?.sequence ?? [],
-            }
-          : undefined;
+        const state = taskStates[task.id] ?? createTaskState();
+        const metadata =
+          task.sequenceAnswer && task.options
+            ? {
+                expectedSequence: task.sequenceAnswer,
+                selectedSequence: state.sequence ?? [],
+              }
+            : task.type === "clock-drawing"
+              ? { description: state.freeResponse ?? "" }
+              : undefined;
+
         return {
           taskId: task.id,
           taskType: "cognitive",
           prompt: task.prompt,
-          responseTimeMs: state?.responseTimeMs ?? 0,
-          correct: state?.correct ?? null,
-          errors: state?.errors,
+          responseTimeMs: Math.round(state.responseTimeMs ?? 0),
+          correct: state.correct ?? null,
+          errors: state.errors ?? 0,
           metadata,
         };
       });
 
-      const scores = tasks.reduce(
+      const scores = tasks.reduce<CognitiveScores>(
         (acc, task) => {
-          const state = taskStates[task.id];
-          const baseScore = state?.correct ? 1 : 0;
-          const penalty = (state?.errors ?? 0) * 0.1;
+          const state = taskStates[task.id] ?? createTaskState();
+          const baseScore = state.correct ? 1 : 0;
+          const penalty = (state.errors ?? 0) * 0.1;
           const adjustedScore = Math.max(0, baseScore - penalty);
 
           if (task.type === "word-recall") acc.memoryScore += adjustedScore;
           if (task.type === "digit-span" || task.type === "attention") acc.attentionScore += adjustedScore;
-          if (task.type === "clock-drawing") acc.executiveScore += adjustedScore;
           if (task.type === "tapping") acc.languageScore += adjustedScore;
+          if (task.type === "clock-drawing") acc.executiveScore += adjustedScore;
 
           return acc;
         },
@@ -168,12 +211,13 @@ export const CognitiveTasks = ({ tasks, onComplete, isSubmitting }: CognitiveTas
           attentionScore: 0,
           languageScore: 0,
           executiveScore: 0,
-        } satisfies CognitiveScores,
+        },
       );
 
-      // Include free-response from clock-drawing task if present
-      const clock = tasks.find((t) => t.type === "clock-drawing");
-      const clockDrawing = clock ? taskStates[clock.id]?.freeResponse : undefined;
+      const clockTask = tasks.find((task) => task.type === "clock-drawing");
+      const clockDrawing = clockTask
+        ? taskStates[clockTask.id]?.freeResponse?.trim() || undefined
+        : undefined;
 
       await onComplete({
         logs,
@@ -230,66 +274,86 @@ export const CognitiveTasks = ({ tasks, onComplete, isSubmitting }: CognitiveTas
         {/* Free-response for clock drawing */}
         {currentTask.type === "clock-drawing" && (
           <div className="grid gap-2">
-            <label className="text-sm text-muted-foreground">Describe your clock drawing (optional)</label>
+            <label className="text-sm text-muted-foreground">Describe your imagined clock (required)</label>
             <textarea
               className="w-full rounded-md border bg-background p-3 text-sm"
               rows={4}
-              placeholder="Example: Numbers 1-12 placed evenly, hour hand near 11, minute hand at 2 (10 minutes)..."
+              placeholder="Numbers 1-12 placed evenly, hour hand near 11, minute hand at 2..."
               value={taskStates[currentTask.id]?.freeResponse ?? ""}
-              onChange={(e) =>
-                setTaskStates((prev) => ({
-                  ...prev,
-                  [currentTask.id]: {
-                    ...(prev[currentTask.id] ?? { startTime: null, responseTimeMs: 0, correct: null, errors: 0 }),
-                    freeResponse: e.target.value,
-                  },
-                }))
-              }
+              onChange={(e) => {
+                const value = e.target.value;
+                setTaskStates((prev) => {
+                  const current = prev[currentTask.id] ?? createTaskState();
+                  return {
+                    ...prev,
+                    [currentTask.id]: {
+                      ...current,
+                      startTime: current.startTime ?? performance.now(),
+                      freeResponse: value,
+                    },
+                  };
+                });
+              }}
             />
           </div>
         )}
 
         <div className="flex flex-wrap gap-3">
+          {currentTask.type !== "clock-drawing" && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!!taskStates[currentTask.id]?.startTime}
+              onClick={() => startTaskTimer(currentTask.id)}
+            >
+              Begin
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
-            disabled={!!taskStates[currentTask.id]?.startTime}
-            onClick={() => startTaskTimer(currentTask.id)}
-          >
-            Begin
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={
-              // If the task has choices (sequence or options), require Begin; else allow Complete
-              ((currentTask.sequenceAnswer || (currentTask.options && currentTask.options.length > 0))
-                ? !taskStates[currentTask.id]?.startTime
-                : false)
-            }
+            disabled={!canCompleteTask(currentTask)}
             onClick={() => {
-              // For sequence tasks, compute correctness/errors at completion
               if (currentTask.sequenceAnswer) {
                 const state = taskStates[currentTask.id];
                 const seq = state?.sequence ?? [];
                 const expected = currentTask.sequenceAnswer;
+                if (seq.length !== expected.length) {
+                  toast({
+                    title: "Finish the sequence",
+                    description: "Select all items in the correct order before completing.",
+                  });
+                  return;
+                }
                 const len = Math.max(expected.length, seq.length);
                 let mismatches = 0;
                 for (let i = 0; i < len; i++) {
                   if (expected[i] !== seq[i]) mismatches++;
                 }
-                const isCorrect = mismatches === 0 && seq.length === expected.length;
+                const isCorrect = mismatches === 0;
                 completeTask(currentTask.id, { correct: isCorrect, errors: mismatches });
-              } else {
-                // For no-input tasks (e.g., clock-drawing), allow completing even if Begin wasn't clicked
-                const noInput = !currentTask.options || currentTask.options.length === 0;
-                if (noInput && !taskStates[currentTask.id]?.startTime) {
+                return;
+              }
+
+              if (currentTask.type === "clock-drawing") {
+                const state = taskStates[currentTask.id];
+                const description = state?.freeResponse?.trim();
+                if (!description) {
+                  toast({
+                    title: "Describe your drawing",
+                    description: "Add a brief description of your imagined clock before continuing.",
+                  });
+                  return;
+                }
+                if (!state?.startTime) {
                   startTaskTimer(currentTask.id);
                 }
-                // Mark clock-drawing as correct so it contributes to executive score
-                const markCorrect = currentTask.type === "clock-drawing" ? { correct: true } : undefined;
-                completeTask(currentTask.id, markCorrect);
+                completeTask(currentTask.id, { correct: true, errors: 0 });
+                return;
               }
+
+              const markCorrect = currentTask.type === "clock-drawing" ? { correct: true } : undefined;
+              completeTask(currentTask.id, markCorrect);
             }}
           >
             Complete
